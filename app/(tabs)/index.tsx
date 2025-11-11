@@ -87,12 +87,16 @@ export default function Feed() {
         <Image source={{ uri: item.image_url }} style={styles.postImage} resizeMode="cover" />
       ) : null}
 
-      <View style={styles.postContent}>
-        <Text style={styles.contentText}>
-          <Text style={styles.usernameInline}>{item.profiles?.username} </Text>
-          {item.content}
-        </Text>
-      </View>
+      {(item.content || item.image_url) && (
+        <View style={styles.postContent}>
+          {item.content ? (
+            <Text style={styles.contentText}>
+              <Text style={styles.usernameInline}>{item.profiles?.username} </Text>
+              {item.content}
+            </Text>
+          ) : null}
+        </View>
+      )
     </View>
   );
 
@@ -175,7 +179,7 @@ const styles = StyleSheet.create({
   },
   postImage: {
     width: '100%',
-    height: 400,
+    height: 300,
     backgroundColor: '#FAFAFA',
   },
   postContent: {
