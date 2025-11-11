@@ -116,3 +116,29 @@ CREATE TRIGGER on_auth_user_created
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS posts_user_id_idx ON posts(user_id);
 CREATE INDEX IF NOT EXISTS posts_created_at_idx ON posts(created_at DESC);
+
+-- Create storage bucket for images
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('images', 'images', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Storage policies for images bucket
+CREATE POLICY "Anyone can view images"
+  ON storage.objects FOR SELECT
+  TO authenticated
+  USING (bucket_id = 'images');
+
+CREATE POLICY "Users can upload images"
+  ON storage.objects FOR INSERT
+  TO authenticated
+  WITH CHECK (bucket_id = 'images' AND auth.uid() = owner);
+
+CREATE POLICY "Users can update their own images"
+  ON storage.objects FOR UPDATE
+  TO authenticated
+  USING (bucket_id = 'images' AND auth.uid() = owner);
+
+CREATE POLICY "Users can delete their own images"
+  ON storage.objects FOR DELETE
+  TO authenticated
+  USING (bucket_id = 'images' AND auth.uid() = owner);
