@@ -29,11 +29,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       (async () => {
         setSession(session);
         setUser(session?.user ?? null);
+        
+        // Ensure profile exists when user logs in/signs up
+        if (session?.user) {
+          await ensureProfileExists(session.user);
+        }
       })();
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Ensure user profile exists in the database
+  const ensureProfileExists = async (user: User) => {
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (!profile) {
+        // Create profile if it doesn't exist
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert({
+            id: user.id,
+            username: user.user_metadata?.username || user.email?.split('@')[0] || 'user',
+            avatar_url: user.user_metadata?.avatar_url || null
+          });
+
+        if (insertError) {
+          console.error('Error creating profile:', insertError);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking profile existence:', error);
+    }
+  };
 
   const signUp = async (email: string, password: string, username: string) => {
     const { error } = await supabase.auth.signUp({

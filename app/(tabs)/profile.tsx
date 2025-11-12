@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Post, Profile } from '@/types/database';
-import { LogOut } from 'lucide-react-native';
+import { LogOut, Camera } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
 
 export default function ProfileScreen() {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -68,6 +69,73 @@ export default function ProfileScreen() {
     }
   };
 
+  const pickAvatar = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'We need camera roll permissions to upload avatars');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      uploadAvatar(result.assets[0].uri);
+    }
+  };
+
+  const uploadAvatar = async (uri: string) => {
+    try {
+      // Fetch the image as a blob
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      
+      // Generate a unique file name
+      const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `${user?.id}/avatar.${fileExt}`;
+      const filePath = `avatars/${fileName}`;
+
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('images')
+        .upload(filePath, blob, {
+          cacheControl: '3600',
+          upsert: true
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      // Get the public URL of the uploaded image
+      const { data } = supabase.storage
+        .from('images')
+        .getPublicUrl(filePath);
+
+      // Update profile with new avatar URL
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: data.publicUrl })
+        .eq('id', user?.id);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      // Refresh profile
+      fetchProfile();
+      Alert.alert('Success', 'Avatar updated successfully!');
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      Alert.alert('Upload Error', 'Failed to upload avatar: ' + (error as Error).message);
+    }
+  };
+
   const renderPost = ({ item }: { item: Post }) => (
     <View style={styles.postItem}>
       {item.image_url ? (
@@ -85,7 +153,7 @@ export default function ProfileScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#000" />
+        <ActivityIndicator size="large" color="#8a2be2" />
       </View>
     );
   }
@@ -93,24 +161,25 @@ export default function ProfileScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View style={styles.profileInfo}>
-          <View style={styles.avatarContainer}>
-            {profile?.avatar_url ? (
-              <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
-            ) : (
-              <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                <Text style={styles.avatarText}>
-                  {profile?.username?.[0]?.toUpperCase() || '?'}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          <View style={styles.stats}>
-            <View style={styles.stat}>
-              <Text style={styles.statNumber}>{posts.length}</Text>
-              <Text style={styles.statLabel}>posts</Text>
+        <TouchableOpacity style={styles.avatarContainer} onPress={pickAvatar}>
+          {profile?.avatar_url ? (
+            <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+              <Text style={styles.avatarText}>
+                {profile?.username?.[0]?.toUpperCase() || '?'}
+              </Text>
             </View>
+          )}
+          <View style={styles.cameraIcon}>
+            <Camera color="#fff" size={16} />
+          </View>
+        </TouchableOpacity>
+
+        <View style={styles.stats}>
+          <View style={styles.stat}>
+            <Text style={styles.statNumber}>{posts.length}</Text>
+            <Text style={styles.statLabel}>posts</Text>
           </View>
         </View>
 
@@ -118,7 +187,7 @@ export default function ProfileScreen() {
         <Text style={styles.email}>{user?.email}</Text>
 
         <TouchableOpacity style={styles.logoutButton} onPress={handleSignOut}>
-          <LogOut color="#262626" size={20} />
+          <LogOut color="#fff" size={20} />
           <Text style={styles.logoutButtonText}>Log Out</Text>
         </TouchableOpacity>
       </View>
@@ -147,7 +216,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#1a1a1a',
   },
   centered: {
     flex: 1,
@@ -157,86 +226,91 @@ const styles = StyleSheet.create({
   header: {
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#DBDBDB',
-  },
-  profileInfo: {
-    flexDirection: 'row',
+    borderBottomColor: '#333',
     alignItems: 'center',
-    marginBottom: 20,
   },
   avatarContainer: {
-    marginRight: 40,
+    position: 'relative',
+    marginBottom: 20,
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
   },
   avatarPlaceholder: {
-    backgroundColor: '#DBDBDB',
+    backgroundColor: '#8a2be2',
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
-    fontSize: 32,
+    fontSize: 40,
     fontWeight: '600',
     color: '#fff',
   },
+  cameraIcon: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#8a2be2',
+    borderRadius: 15,
+    padding: 5,
+  },
   stats: {
-    flex: 1,
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'center',
+    marginBottom: 20,
+    width: '100%',
   },
   stat: {
     alignItems: 'center',
   },
   statNumber: {
-    fontSize: 18,
+    fontSize: 24,
     fontWeight: '600',
-    color: '#262626',
+    color: '#fff',
   },
   statLabel: {
-    fontSize: 14,
-    color: '#999',
+    fontSize: 16,
+    color: '#aaa',
     marginTop: 4,
   },
   username: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '600',
-    color: '#262626',
+    color: '#fff',
     marginBottom: 4,
   },
   email: {
-    fontSize: 14,
-    color: '#999',
-    marginBottom: 15,
+    fontSize: 16,
+    color: '#aaa',
+    marginBottom: 20,
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 15,
-    borderWidth: 1,
-    borderColor: '#DBDBDB',
-    borderRadius: 5,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(138, 43, 226, 0.3)',
+    borderRadius: 25,
   },
   logoutButtonText: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#262626',
+    color: '#fff',
   },
   postsHeader: {
     paddingVertical: 15,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#DBDBDB',
+    borderBottomColor: '#333',
   },
   postsHeaderText: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
-    color: '#262626',
+    color: '#fff',
   },
   postsContainer: {
     padding: 1,
@@ -253,14 +327,14 @@ const styles = StyleSheet.create({
   postPlaceholder: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#2a2a2a',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 8,
   },
   postPlaceholderText: {
     fontSize: 12,
-    color: '#262626',
+    color: '#fff',
     textAlign: 'center',
   },
   emptyContainer: {
@@ -272,11 +346,11 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#262626',
+    color: '#fff',
     marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#999',
+    color: '#aaa',
   },
 });

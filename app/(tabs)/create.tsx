@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ScrollView, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -10,6 +10,7 @@ export default function CreatePost() {
   const [content, setContent] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const { user } = useAuth();
   const router = useRouter();
 
@@ -35,6 +36,8 @@ export default function CreatePost() {
 
   const uploadImage = async (uri: string): Promise<string | null> => {
     try {
+      setUploading(true);
+      
       // Fetch the image as a blob
       const response = await fetch(uri);
       const blob = await response.blob();
@@ -66,6 +69,8 @@ export default function CreatePost() {
       console.error('Error uploading image:', error);
       Alert.alert('Upload Error', 'Failed to upload image: ' + (error as Error).message);
       return null;
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -132,7 +137,7 @@ export default function CreatePost() {
             onChangeText={setContent}
             multiline
             numberOfLines={4}
-            placeholderTextColor="#999"
+            placeholderTextColor="#aaa"
           />
 
           {imageUri && (
@@ -148,18 +153,27 @@ export default function CreatePost() {
           )}
 
           <TouchableOpacity style={styles.imageButton} onPress={pickImage}>
-            <Camera color="#262626" size={24} />
+            <Camera color="#fff" size={24} />
             <Text style={styles.imageButtonText}>Add Image</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.postButton, loading && styles.postButtonDisabled]}
+            style={[styles.postButton, (loading || uploading) && styles.postButtonDisabled]}
             onPress={handleCreatePost}
-            disabled={loading}
+            disabled={loading || uploading}
           >
-            <Text style={styles.postButtonText}>
-              {loading ? 'Posting...' : 'Share Post'}
-            </Text>
+            {(loading || uploading) ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator color="#fff" size="small" />
+                <Text style={styles.postButtonText}>
+                  {uploading ? 'Uploading...' : 'Posting...'}
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.postButtonText}>
+                Share Post
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -170,7 +184,7 @@ export default function CreatePost() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#1a1a1a',
   },
   scrollView: {
     flex: 1,
@@ -180,14 +194,15 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   input: {
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#2a2a2a',
     borderWidth: 1,
-    borderColor: '#DBDBDB',
-    borderRadius: 5,
+    borderColor: '#333',
+    borderRadius: 10,
     padding: 15,
     fontSize: 16,
     minHeight: 120,
     textAlignVertical: 'top',
+    color: '#fff',
   },
   imageContainer: {
     position: 'relative',
@@ -195,7 +210,7 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: 300,
-    borderRadius: 5,
+    borderRadius: 10,
   },
   removeButton: {
     position: 'absolute',
@@ -218,26 +233,39 @@ const styles = StyleSheet.create({
     gap: 10,
     padding: 15,
     borderWidth: 1,
-    borderColor: '#DBDBDB',
-    borderRadius: 5,
+    borderColor: '#333',
+    borderRadius: 10,
     borderStyle: 'dashed',
   },
   imageButtonText: {
     fontSize: 16,
-    color: '#262626',
+    color: '#fff',
   },
   postButton: {
-    backgroundColor: '#0095F6',
-    borderRadius: 5,
+    backgroundColor: '#8a2be2',
+    borderRadius: 10,
     padding: 15,
     alignItems: 'center',
+    shadowColor: '#8a2be2',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
   },
   postButtonDisabled: {
-    opacity: 0.5,
+    opacity: 0.7,
   },
   postButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
 });
