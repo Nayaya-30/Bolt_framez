@@ -20,7 +20,7 @@ export default function Index() {
   if (loading || onboardingComplete === null) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color="#000" />
+        <ActivityIndicator size="large" color="#8a2be2" />
       </View>
     );
   }
@@ -44,6 +44,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#1a1a1a',
   },
 });
