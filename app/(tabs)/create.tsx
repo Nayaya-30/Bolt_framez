@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Camera } from 'lucide-react-native';
 import { decode as atob } from 'base-64';
 
@@ -41,56 +41,56 @@ export default function CreatePost() {
 	};
 
 	const uploadImage = async (uri: string): Promise<string | null> => {
-	try {
-		if (!user?.id) {
-			throw new Error('User not authenticated');
-		}
+		try {
+			if (!user?.id) throw new Error('User not authenticated');
 
-		setUploading(true);
-		console.log('Uploading image with FileSystem method:', uri);
+			setUploading(true);
+			console.log('Uploading image via FileSystem path:', uri);
 
-		// Read file as base64
-		const base64 = await FileSystem.readAsStringAsync(uri, {
-			encoding: FileSystem.EncodingType.Base64,
-		});
+			// Generate unique file name and storage path
+			const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
+			const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+			const filePath = `posts/${fileName}`;
+			console.log('Uploading to:', filePath);
 
-		// Convert base64 → Uint8Array
-		const binaryString = atob(base64);
-		const bytes = new Uint8Array(binaryString.length);
-		for (let i = 0; i < binaryString.length; i++) {
-			bytes[i] = binaryString.charCodeAt(i);
-		}
+			// Read file as binary buffer directly
+			const fileInfo = await FileSystem.getInfoAsync(uri);
+			if (!fileInfo.exists) throw new Error('File does not exist at given URI');
 
-		// Generate a unique file name
-		const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
-		const fileName = `${user?.id}-${Date.now()}.${fileExt}`;
-		const filePath = `posts/${fileName}`;
-		console.log('Uploading to path:', filePath);
-
-		// Upload to Supabase Storage using ArrayBuffer (no Blob)
-		const { error: uploadError } = await supabase.storage
-			.from('images')
-			.upload(filePath, bytes.buffer, {
-				cacheControl: '3600',
-				upsert: false,
-				contentType: 'image/jpeg',
+			// Read as binary array buffer
+			const fileContent = await FileSystem.readAsStringAsync(uri, {
+				encoding: FileSystem.EncodingType.Base64,
 			});
 
-		if (uploadError) throw uploadError;
+			// Convert base64 → Uint8Array without Blob usage
+			const binary = globalThis.atob(fileContent);
+			const len = binary.length;
+			const bytes = new Uint8Array(len);
+			for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
 
-		// Get the public URL of the uploaded image
-		const { data } = supabase.storage.from('images').getPublicUrl(filePath);
-		console.log('Image uploaded successfully:', data.publicUrl);
+			// Upload directly to Supabase Storage
+			const { error } = await supabase.storage
+				.from('images')
+				.upload(filePath, bytes, {
+					contentType: `image/${fileExt}`,
+					cacheControl: '3600',
+					upsert: false,
+				});
 
-		return data.publicUrl;
-	} catch (error) {
-		console.error('Error uploading image:', error);
-		Alert.alert('Upload Error', 'Failed to upload image: ' + (error as Error).message);
-		return null;
-	} finally {
-		setUploading(false);
-	}
-};
+			if (error) throw error;
+
+			// Retrieve public URL
+			const { data } = supabase.storage.from('images').getPublicUrl(filePath);
+			console.log('Image uploaded successfully:', data.publicUrl);
+			return data.publicUrl;
+		} catch (err) {
+			console.error('Upload error:', err);
+			Alert.alert('Upload Failed', (err as Error).message);
+			return null;
+		} finally {
+			setUploading(false);
+		}
+	};
 	const handleCreatePost = async () => {
 		if (!content.trim() && !imageUri) {
 			Alert.alert('Error', 'Please add some content or an image');

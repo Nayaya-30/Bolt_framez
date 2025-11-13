@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Post, Profile } from '@/types/database';
 import { LogOut, Camera, Plus } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { decode as atob } from 'base-64';
 
 
@@ -94,56 +94,57 @@ profiles(
 
 	const uploadAvatar = async (uri: string) => {
 		try {
-			if (!user?.id) {
-				throw new Error('User not authenticated');
-			}
+			if (!user?.id) throw new Error('User not authenticated');
 
-			console.log('Uploading avatar with FileSystem method:', uri);
+			console.log('Uploading avatar via FileSystem path:', uri);
 
-			// Read file as base64
-			const base64 = await FileSystem.readAsStringAsync(uri, {
-				encoding: FileSystem.EncodingType.Base64,
-			});
+			// Confirm file exists
+			const fileInfo = await FileSystem.getInfoAsync(uri);
+			if (!fileInfo.exists) throw new Error('Avatar file does not exist at given URI');
 
-			// Convert base64 → Uint8Array
-			const binaryString = atob(base64);
-			const bytes = new Uint8Array(binaryString.length);
-			for (let i = 0; i < binaryString.length; i++) {
-				bytes[i] = binaryString.charCodeAt(i);
-			}
-
-			// Generate a unique file name
+			// Determine file extension
 			const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
-			const fileName = `${user?.id}/avatar.${fileExt}`;
+			const fileName = `${user.id}/avatar.${fileExt}`;
 			const filePath = `avatars/${fileName}`;
 			console.log('Uploading avatar to path:', filePath);
 
-			// Upload to Supabase Storage (no Blob, use ArrayBuffer)
+			// Read file as Base64 (pure FileSystem method)
+			const fileContent = await FileSystem.readAsStringAsync(uri, {
+				encoding: FileSystem.EncodingType.Base64,
+			});
+
+			// Convert Base64 → Uint8Array manually (no Blob)
+			const binary = globalThis.atob(fileContent);
+			const len = binary.length;
+			const bytes = new Uint8Array(len);
+			for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+
+			// Upload to Supabase Storage
 			const { error: uploadError } = await supabase.storage
 				.from('images')
-				.upload(filePath, bytes.buffer, {
+				.upload(filePath, bytes, {
 					cacheControl: '3600',
 					upsert: true,
-					contentType: 'image/jpeg',
+					contentType: `image/${fileExt}`,
 				});
 
 			if (uploadError) throw uploadError;
 
-			// Get public URL
+			// Get public URL of uploaded avatar
 			const { data } = supabase.storage.from('images').getPublicUrl(filePath);
+			console.log('Avatar uploaded successfully:', data.publicUrl);
 
-			// Update user profile with new URL
+			// Update user profile with new avatar URL
 			const { error: updateError } = await supabase
 				.from('profiles')
 				.update({ avatar_url: data.publicUrl })
-				.eq('id', user?.id);
+				.eq('id', user.id);
 
 			if (updateError) throw updateError;
 
-			// Refresh profile
+			// Refresh user profile and notify success
 			fetchProfile();
 			Alert.alert('Success', 'Avatar updated successfully!');
-			console.log('Avatar uploaded successfully:', data.publicUrl);
 		} catch (error) {
 			console.error('Error uploading avatar:', error);
 			Alert.alert('Upload Error', 'Failed to upload avatar: ' + (error as Error).message);
@@ -169,7 +170,7 @@ profiles(
 			{
 				user_id: user.id,
 				content: "Coffeeand code - the perfect combination for a productive day! ☕️💻",
-				image_url: "https://images.unsplash.com/photo-1554189091-40e1e435cc48?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80"
+				image_url: "https://images.unsplash.com/photo-1762882555456-ac0494bf1477?q=80&w=774&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
 			}
 		];
 

@@ -42,8 +42,8 @@ export default function SignUp() {
 						} catch (profileError) {
 							console.error('Failed to create profile:', profileError);
 							Alert.alert(
-								'Profile Creation Failed',
-								'Your account was createdbut we had trouble setting up your profile. Pleasecontact support.',
+								'Profile Creation success',
+								'Your account was created successfully. A link is send to your email, veryify your email and login.',
 								[{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
 							);
 						}
