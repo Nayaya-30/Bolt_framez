@@ -38,13 +38,13 @@ export default function SignUp() {
 					if (user) {
 						try {
 							await createProfile(user, username);
-							router.replace('/(login)');
+							router.replace('/(auth)/login');
 						} catch (profileError) {
 							console.error('Failed to create profile:', profileError);
 							Alert.alert(
 								'Profile Creation success',
 								'Your account was created successfully. A link is send to your email, veryify your email and login.',
-								[{ text: 'OK', onPress: () => router.replace('/(login)') }]
+								[{ text: 'OK', onPress: () => router.replace('/(auth)/login') }]
 							);
 						}
 					}
